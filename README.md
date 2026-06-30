@@ -3,7 +3,7 @@
 A small AI support agent for a live chat widget, built for the Spur founding
 engineer take-home. A customer chats with an AI agent that answers
 questions about a fictional store (shipping, returns, support hours, etc.)
-using a real LLM (Anthropic Claude), with full conversation persistence.
+using a real LLM, with full conversation persistence.
 
 ## Stack
 
@@ -12,7 +12,15 @@ using a real LLM (Anthropic Claude), with full conversation persistence.
   build step — see "Design decisions" below)
 - **Frontend:** Plain HTML/CSS/JS chat widget (no framework/build step
   needed — see note below)
-- **LLM:** Anthropic Claude (`@anthropic-ai/sdk`)
+- **LLM:** [Groq](https://groq.com) (free tier), using their OpenAI-compatible
+  chat completions API with the `llama-3.3-70b-versatile` model
+
+> **Note on LLM provider:** the brief suggested OpenAI/Anthropic as
+> examples ("any major LLM provider"). I used Groq's free API instead — it's
+> OpenAI-compatible, fast, and has a generous free tier, which made it a
+> practical choice for this exercise. The integration is fully encapsulated
+> in `services/llm.ts`, so swapping to OpenAI or Anthropic later is a
+> contained change to that one file (see "Design decisions" below).
 
 > **Note on frontend framework:** the brief suggested Svelte/React. I used
 > a small vanilla JS widget instead, since the UI surface here is genuinely
@@ -35,7 +43,7 @@ spur-chat-agent/
         chat.ts                # POST /chat/message, GET /chat/history/:sessionId
       services/
         chatService.ts        # Orchestrates validation + persistence + LLM call
-        llm.ts                 # Anthropic API wrapper (generateReply)
+        llm.ts                 # Groq API wrapper (generateReply)
         knowledgeBase.ts       # Hardcoded FAQ/store info injected into the system prompt
   frontend/
     index.html
@@ -49,7 +57,7 @@ spur-chat-agent/
 
 - Node.js **22.5+** (required for the built-in `node:sqlite` module —
   check with `node -v`)
-- An Anthropic API key ([console.anthropic.com](https://console.anthropic.com))
+- A free Groq API key ([console.groq.com/keys](https://console.groq.com/keys))
 
 ### 1. Backend
 
@@ -57,7 +65,7 @@ spur-chat-agent/
 cd backend
 npm install
 cp .env.example .env
-# edit .env and set ANTHROPIC_API_KEY=sk-ant-...
+# edit .env and set GROQ_API_KEY=gsk_...
 npm run dev
 ```
 
@@ -89,11 +97,11 @@ your backend runs elsewhere).
 
 ### Environment variables (backend/.env)
 
-| Variable             | Required | Description                                      |
-|-----------------------|----------|---------------------------------------------------|
-| `ANTHROPIC_API_KEY`   | Yes      | Your Anthropic API key                            |
-| `PORT`                 | No       | Backend port (default `4000`)                     |
-| `DATABASE_PATH`        | No       | SQLite file path (default `backend/data/chat.db`) |
+| Variable        | Required | Description                                       |
+| --------------- | -------- | ------------------------------------------------- |
+| `GROQ_API_KEY`  | Yes      | Your free Groq API key                            |
+| `PORT`          | No       | Backend port (default `4000`)                     |
+| `DATABASE_PATH` | No       | SQLite file path (default `backend/data/chat.db`) |
 
 No secrets are committed — `.env` is gitignored, and `.env.example` shows
 the shape.
@@ -103,11 +111,16 @@ the shape.
 ### `POST /chat/message`
 
 Request:
+
 ```json
-{ "message": "Do you ship to the USA?", "sessionId": "optional-existing-session-id" }
+{
+  "message": "Do you ship to the USA?",
+  "sessionId": "optional-existing-session-id"
+}
 ```
 
 Response:
+
 ```json
 { "reply": "We currently only ship within India...", "sessionId": "..." }
 ```
@@ -150,11 +163,14 @@ the same table later without a schema change.
   All SQL lives behind `db/conversations.ts`, so swapping the driver (or
   moving to Postgres for a real multi-tenant deployment) only touches
   that one file.
-- **LLM call is fully encapsulated in `services/llm.ts`.** `generateReply(history, userMessage)`
-  is the only function the rest of the app calls — it owns model choice,
-  system prompt construction, token limits, and error normalization. Swapping
-  providers (OpenAI, etc.) or adding tool calls later means editing this
-  file only.
+- **Groq, called directly via `fetch` against its OpenAI-compatible
+  endpoint**, instead of a heavier SDK. The whole integration lives in
+  `services/llm.ts` behind a single `generateReply(history, userMessage)`
+  function — it owns model choice, system prompt construction, token
+  limits, and error normalization (401 → bad key, 429 → rate limited,
+  5xx → provider down). The rest of the app never touches Groq directly,
+  so swapping to OpenAI or Anthropic later means editing this one file
+  only (both have very similar chat-completion shapes).
 - **Errors from the LLM are turned into a normal-looking AI message,
   not an HTTP error.** A chat widget showing a raw "500 error" toast is a
   worse UX than the agent saying "I'm having trouble right now, please
@@ -176,12 +192,14 @@ the same table later without a schema change.
 
 - **Streaming responses.** Right now the reply comes back as one JSON
   blob; a real product would stream tokens so the agent's reply appears
-  incrementally instead of all at once.
+  incrementally instead of all at once (Groq supports SSE streaming on
+  the same endpoint).
 - **Per-merchant knowledge base in the DB**, with a simple admin UI to
   edit it, instead of hardcoded text — this is the natural next step
   toward the real Spur product.
 - **Rate limiting / abuse protection** on `/chat/message` (e.g. per-IP or
-  per-session) — currently only body size is capped.
+  per-session) — currently only body size is capped. This matters more
+  with Groq's free tier, which has its own rate limits.
 - **Svelte/React frontend** if the widget grew beyond a single page (e.g.
   multiple conversations, an agent handoff UI) — vanilla JS was a
   deliberate choice for this scope, not a long-term one.
@@ -196,7 +214,12 @@ the same table later without a schema change.
 ## Deployment notes
 
 - Backend: deployable as-is to Render/Railway/Fly.io etc. — just set
-  `ANTHROPIC_API_KEY` (and optionally `PORT`) as environment variables.
-  Note the host needs Node 22.5+ for `node:sqlite`.
+  `GROQ_API_KEY` (and optionally `PORT`) as environment variables. Note
+  the host needs Node 22.5+ for `node:sqlite` (e.g. add a `.node-version`
+  file pinning a recent Node 22 release on Render).
+- SQLite on most free hosting tiers (e.g. Render's free plan) lives on an
+  ephemeral filesystem, so conversation history resets on redeploy/restart.
+  Fine for this exercise; a real deployment would use Postgres or a
+  persistent disk.
 - Frontend: any static host (Vercel/Netlify/GitHub Pages) works — just
   point `API_BASE` in `app.js` at the deployed backend URL.
