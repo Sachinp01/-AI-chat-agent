@@ -3,7 +3,7 @@
 //   GET  /chat/history/:sessionId   -> rehydrate past messages on load
 //   POST /chat/message              -> send a new message, get the AI reply
 
-const API_BASE = window.API_BASE || "http://localhost:4000";
+const API_BASE = window.API_BASE || "https://ai-chat-agent-95c0.onrender.com";
 const SESSION_KEY = "spur_chat_session_id";
 
 const elMessages = document.getElementById("chat-messages");
@@ -45,13 +45,15 @@ function bindEvents() {
 function renderWelcomeMessage() {
   appendBubble(
     "ai",
-    "Hi! I'm the Northwind Goods support agent. Ask me about shipping, returns, order tracking, or anything else about your order."
+    "Hi! I'm the Northwind Goods support agent. Ask me about shipping, returns, order tracking, or anything else about your order.",
   );
 }
 
 async function loadHistory(id) {
   try {
-    const res = await fetch(`${API_BASE}/chat/history/${encodeURIComponent(id)}`);
+    const res = await fetch(
+      `${API_BASE}/chat/history/${encodeURIComponent(id)}`,
+    );
     if (!res.ok) throw new Error("Failed to load history");
     const data = await res.json();
 
@@ -87,14 +89,22 @@ async function handleSend() {
     const res = await fetch(`${API_BASE}/chat/message`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, sessionId: sessionId || undefined }),
+      body: JSON.stringify({
+        message: text,
+        sessionId: sessionId || undefined,
+      }),
     });
 
     typingEl.remove();
 
     if (!res.ok) {
       const errBody = await safeJson(res);
-      appendBubble("ai", errBody?.error || "Something went wrong. Please try again.", null, true);
+      appendBubble(
+        "ai",
+        errBody?.error || "Something went wrong. Please try again.",
+        null,
+        true,
+      );
       return;
     }
 
@@ -113,7 +123,7 @@ async function handleSend() {
       "ai",
       "Couldn't reach the server. Check your connection and try again.",
       null,
-      true
+      true,
     );
   } finally {
     setSending(false);
