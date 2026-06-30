@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Northwind Goods — Support Chat</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <h1>Northwind Goods</h1>
+      <p>This is a demo storefront. Chat with our AI support agent below.</p>
+    </div>
+
+    <div class="chat-widget" id="chat-widget">
+      <div class="chat-header">
+        <div class="chat-header-avatar">NG</div>
+        <div>
+          <div class="chat-header-title">Support Agent</div>
+          <div class="chat-header-subtitle" id="status-line">Online</div>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chat-messages" role="log" aria-live="polite">
+        <!-- messages injected here -->
+      </div>
+
+      <div class="chat-input-row">
+        <textarea
+          id="chat-input"
+          placeholder="Type a message…"
+          rows="1"
+          maxlength="4000"
+        ></textarea>
+        <button id="send-btn" type="button" aria-label="Send message">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M3 11.5L21 3L13 21L11 13L3 11.5Z" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
